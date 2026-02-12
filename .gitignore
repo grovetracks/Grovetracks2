@@ -1,0 +1,102 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.vs/
+*.DotSettings.user
+
+# Node / Angular
+node_modules/
+dist/
+.angular/
+.sass-cache/
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ETL progress
+progress.txt
+progress-seed.txt
+progress-seed-simple.txt
+progress-upload.txt
+
+# Environment
+*.env
+!*.env.example
+appsettings.*.local.json
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.mdf
+*.ldf
+*.bak
+*.sql
+*.dump
+postgres-data/
+pgdata/
+
+# Large data files
+*.csv
+*.json.gz
+*.tar.gz
+*.zip
+*.7z
+*.rar
+data/
+datasets/
+*.parquet
+*.feather
+*.arrow
+
+# Media files
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+*.mkv
+*.webm
+*.mp3
+*.wav
+*.flac
+*.ogg
+*.m4a
+
+# Image files (large)
+*.psd
+*.ai
+*.sketch
+*.fig
+*.xcf
+
+# Model files
+*.h5
+*.pkl
+*.pickle
+*.pt
+*.pth
+*.onnx
+*.pb
+models/
+checkpoints/
+
+# Log files
+*.log
+logs/
+*.log.*
+
+# Temporary and cache
+*.tmp
+*.temp
+*.cache
+.cache/
+tmp/

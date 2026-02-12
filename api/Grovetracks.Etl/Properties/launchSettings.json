@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Grovetracks.Etl": {
+      "commandName": "Project",
+      "commandLineArgs": "seed-database"
+    }
+  }
+}

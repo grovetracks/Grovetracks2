@@ -1,0 +1,275 @@
+using System.Text.Json;
+using Anthropic;
+using Anthropic.Models.Messages;
+using Grovetracks.DataAccess;
+using Grovetracks.DataAccess.Entities;
+using Grovetracks.DataAccess.Generation;
+using Grovetracks.Etl.Data;
+using Grovetracks.Etl.Mappers;
+using Grovetracks.Etl.Models;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+
+namespace Grovetracks.Etl.Operations;
+
+public static class GenerateAiCompositionsOperation
+{
+    private const int DefaultPerSubject = 5;
+    private const double MinQualityThreshold = 0.30;
+    private const string SourceTypeValue = "ai-generated";
+    private const string GenerationMethodValue = "claude-sonnet";
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
+
+    public static async Task RunAsync(
+        IConfiguration config,
+        int perSubject = DefaultPerSubject,
+        bool truncate = false,
+        bool dryRun = false,
+        bool resume = false)
+    {
+        var connectionString = config["ConnectionStrings:DefaultConnection"]
+            ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection not configured");
+
+        var model = config["Anthropic:Model"] ?? "claude-sonnet-4-5-20250929";
+        var maxRetries = int.TryParse(config["Anthropic:MaxRetries"], out var r) ? r : 3;
+        var delayMs = int.TryParse(config["Anthropic:DelayBetweenCallsMs"], out var d) ? d : 500;
+
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql(connectionString)
+            .Options;
+
+        if (truncate && !dryRun)
+        {
+            Console.WriteLine("Removing previously AI-generated compositions...");
+            await using var truncateDb = new AppDbContext(options);
+            var deleted = await truncateDb.SeedCompositions
+                .Where(s => s.SourceType == SourceTypeValue)
+                .ExecuteDeleteAsync();
+            Console.WriteLine($"Removed {deleted:N0} AI-generated compositions.");
+        }
+
+        var subjects = ComposableSubjects.All;
+        var subjectsToProcess = subjects.ToList();
+
+        if (resume && !dryRun)
+        {
+            Console.WriteLine("Checking for existing AI-generated compositions...");
+            await using var checkDb = new AppDbContext(options);
+            var existingCounts = await checkDb.SeedCompositions
+                .Where(s => s.SourceType == SourceTypeValue)
+                .GroupBy(s => s.Word)
+                .Select(g => new { Word = g.Key, Count = g.Count() })
+                .ToListAsync();
+
+            var completedSubjects = existingCounts
+                .Where(x => x.Count >= perSubject)
+                .Select(x => x.Word)
+                .ToHashSet();
+
+            subjectsToProcess = subjectsToProcess
+                .Where(s => !completedSubjects.Contains(s))
+                .ToList();
+
+            Console.WriteLine($"Skipping {subjects.Count - subjectsToProcess.Count} already-completed subjects.");
+        }
+
+        Console.WriteLine($"Subjects: {subjectsToProcess.Count} to process (of {subjects.Count} total)");
+        Console.WriteLine($"Per subject: {perSubject} compositions");
+        Console.WriteLine($"Model: {model}");
+        Console.WriteLine($"Mode: {(dryRun ? "DRY RUN" : "LIVE")}");
+        Console.WriteLine();
+
+        if (dryRun)
+        {
+            Console.WriteLine("=== DRY RUN — No API calls or database writes ===");
+            Console.WriteLine($"Would generate up to {subjectsToProcess.Count * perSubject:N0} compositions");
+            Console.WriteLine($"Estimated API calls: {subjectsToProcess.Count}");
+            Console.WriteLine();
+            Console.WriteLine("Sample subjects:");
+            foreach (var subject in subjectsToProcess.Take(20))
+                Console.WriteLine($"  - {subject}");
+            if (subjectsToProcess.Count > 20)
+                Console.WriteLine($"  ... and {subjectsToProcess.Count - 20} more");
+            return;
+        }
+
+        using var cts = new CancellationTokenSource();
+        var cancelled = false;
+
+        Console.CancelKeyPress += (_, e) =>
+        {
+            e.Cancel = true;
+            cancelled = true;
+            cts.Cancel();
+            Console.WriteLine();
+            Console.WriteLine("Shutting down gracefully, saving pending compositions...");
+        };
+
+        var client = new AnthropicClient { MaxRetries = maxRetries };
+
+        var totalGenerated = 0;
+        var totalValid = 0;
+        var failedSubjects = new List<string>();
+
+        for (var i = 0; i < subjectsToProcess.Count; i++)
+        {
+            if (cancelled)
+                break;
+
+            var subject = subjectsToProcess[i];
+            var progress = $"[{i + 1}/{subjectsToProcess.Count}]";
+
+            try
+            {
+                var userPrompt = AiCompositionPrompts.BuildUserPrompt(subject, perSubject);
+
+                var schemaDict = JsonSerializer.Deserialize<IReadOnlyDictionary<string, JsonElement>>(
+                    JsonSerializer.Serialize(AiCompositionPrompts.CompositionSchema))!;
+
+                var parameters = new MessageCreateParams
+                {
+                    Model = model,
+                    MaxTokens = 4096,
+                    System = AiCompositionPrompts.SystemPrompt,
+                    Messages =
+                    [
+                        new MessageParam
+                        {
+                            Role = Role.User,
+                            Content = userPrompt
+                        }
+                    ],
+                    OutputConfig = new OutputConfig
+                    {
+                        Format = new JsonOutputFormat
+                        {
+                            Schema = schemaDict
+                        }
+                    }
+                };
+
+                var message = await client.Messages.Create(parameters, cts.Token);
+
+                var responseText = ExtractTextContent(message);
+                if (responseText is null)
+                {
+                    Console.WriteLine($"  {progress} {subject}: no text content in response");
+                    failedSubjects.Add(subject);
+                    continue;
+                }
+
+                var batch = JsonSerializer.Deserialize<AiCompositionBatch>(responseText, JsonOptions);
+                if (batch?.Compositions is null || batch.Compositions.Count == 0)
+                {
+                    Console.WriteLine($"  {progress} {subject}: empty or invalid response");
+                    failedSubjects.Add(subject);
+                    continue;
+                }
+
+                var subjectGenerated = 0;
+                var subjectValid = 0;
+                var subjectBatch = new List<SeedComposition>();
+
+                foreach (var aiComp in batch.Compositions)
+                {
+                    subjectGenerated++;
+                    totalGenerated++;
+
+                    var composition = AiCompositionMapper.MapToComposition(aiComp, GenerationMethodValue);
+                    var (isValid, qualityScore) = CompositionValidator.Validate(composition);
+
+                    if (!isValid || qualityScore < MinQualityThreshold)
+                        continue;
+
+                    var compositionJson = JsonSerializer.Serialize(composition, JsonOptions);
+
+                    subjectBatch.Add(new SeedComposition
+                    {
+                        Id = Guid.NewGuid(),
+                        Word = subject,
+                        SourceKeyId = "ai-generated",
+                        QualityScore = qualityScore,
+                        StrokeCount = CompositionGeometry.CountTotalStrokes(composition),
+                        TotalPointCount = CompositionGeometry.CountTotalPoints(composition),
+                        CompositionJson = compositionJson,
+                        CuratedAt = DateTime.UtcNow,
+                        SourceType = SourceTypeValue,
+                        GenerationMethod = GenerationMethodValue,
+                        SourceCompositionIds = null
+                    });
+
+                    subjectValid++;
+                    totalValid++;
+                }
+
+                if (subjectBatch.Count > 0)
+                    await FlushBatchAsync(options, subjectBatch);
+
+                Console.WriteLine($"  {progress} {subject}: {subjectGenerated} generated, {subjectValid} valid (saved)");
+
+                if (!cancelled && i < subjectsToProcess.Count - 1)
+                {
+                    try { await Task.Delay(delayMs, cts.Token); }
+                    catch (OperationCanceledException) { }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine($"  {progress} {subject}: cancelled");
+                break;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  {progress} {subject}: ERROR — {ex.Message}");
+                failedSubjects.Add(subject);
+            }
+        }
+
+        Console.WriteLine();
+        if (cancelled)
+        {
+            Console.WriteLine("=== AI Generation Summary (Cancelled by user) ===");
+            Console.WriteLine($"  Generated:  {totalGenerated:N0}");
+            Console.WriteLine($"  Saved:      {totalValid:N0}");
+            Console.WriteLine("  All completed subjects were saved to the database.");
+            Console.WriteLine("  Re-run with --resume to continue where you left off.");
+        }
+        else
+        {
+            Console.WriteLine("=== AI Generation Summary ===");
+            Console.WriteLine($"  Generated:  {totalGenerated:N0}");
+            Console.WriteLine($"  Valid:      {totalValid:N0}");
+            Console.WriteLine($"  Failed:     {failedSubjects.Count} subjects");
+            if (failedSubjects.Count > 0)
+            {
+                Console.WriteLine($"  Failed subjects: {string.Join(", ", failedSubjects)}");
+                Console.WriteLine("  (Re-run with --resume to retry failed subjects)");
+            }
+        }
+    }
+
+    internal static string? ExtractTextContent(Message message)
+    {
+        foreach (var block in message.Content)
+        {
+            if (block.TryPickText(out var textBlock))
+                return textBlock.Text;
+        }
+
+        return null;
+    }
+
+    private static async Task FlushBatchAsync(
+        DbContextOptions<AppDbContext> options,
+        List<SeedComposition> batch)
+    {
+        await using var db = new AppDbContext(options);
+        db.SeedCompositions.AddRange(batch);
+        await db.SaveChangesAsync();
+    }
+}

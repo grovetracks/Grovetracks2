@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Grovetracks.Api/Grovetracks.Api.csproj" />
+  <Project Path="Grovetracks.DataAccess/Grovetracks.DataAccess.csproj" />
+  <Project Path="Grovetracks.Etl/Grovetracks.Etl.csproj" />
+  <Project Path="Grovetracks.Test.Integration/Grovetracks.Test.Integration.csproj" />
+  <Project Path="Grovetracks.Test.Unit/Grovetracks.Test.Unit.csproj" />
+</Solution>
