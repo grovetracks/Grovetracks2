@@ -18,7 +18,7 @@ import { DoodleCanvasComponent } from '../../gallery/ui/doodle-canvas.component'
           }
         </div>
 
-        <div class="flex gap-1 mb-6">
+        <div class="flex gap-1 mb-4">
           @for (tab of tabs; track tab.value) {
             <button
               class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
@@ -30,6 +30,34 @@ import { DoodleCanvasComponent } from '../../gallery/ui/doodle-canvas.component'
             </button>
           }
         </div>
+
+        @if (generationMethods().length > 0) {
+          <div class="mb-6">
+            <label class="block text-xs font-medium text-slate-500 mb-1.5">
+              Generation Method
+            </label>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
+                [class]="activeGenerationMethod() === null
+                  ? 'bg-indigo-500 text-white'
+                  : 'bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-slate-300'"
+                (click)="selectGenerationMethod(null)">
+                All
+              </button>
+              @for (method of generationMethods(); track method) {
+                <button
+                  class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
+                  [class]="method === activeGenerationMethod()
+                    ? 'bg-indigo-500 text-white'
+                    : 'bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-slate-300'"
+                  (click)="selectGenerationMethod(method)">
+                  {{ method }}
+                </button>
+              }
+            </div>
+          </div>
+        }
 
         @if (words().length > 0) {
           <div class="mb-8">
@@ -128,6 +156,8 @@ export class SeedsPageComponent implements OnInit {
   protected readonly totalCount = signal(0);
   protected readonly categoryCount = signal(0);
   protected readonly activeTab = signal<SourceTypeFilter>('all');
+  protected readonly generationMethods = signal<ReadonlyArray<string>>([]);
+  protected readonly activeGenerationMethod = signal<string | null>(null);
 
   protected readonly tabs: ReadonlyArray<{ readonly label: string; readonly value: SourceTypeFilter }> = [
     { label: 'All', value: 'all' },
@@ -137,30 +167,48 @@ export class SeedsPageComponent implements OnInit {
   ];
 
   ngOnInit(): void {
-    this.loadWordsAndCount(this.activeTab());
+    this.loadWordsAndCount(this.activeTab(), this.activeGenerationMethod());
   }
 
   selectTab(tab: SourceTypeFilter): void {
     this.activeTab.set(tab);
+    this.activeGenerationMethod.set(null);
     this.selectedWord.set(null);
     this.items.set([]);
     this.categoryCount.set(0);
-    this.loadWordsAndCount(tab);
+
+    if (tab === 'ai-generated') {
+      this.seedService.getDistinctGenerationMethods(tab).subscribe({
+        next: (methods) => this.generationMethods.set(methods)
+      });
+    } else {
+      this.generationMethods.set([]);
+    }
+
+    this.loadWordsAndCount(tab, null);
+  }
+
+  selectGenerationMethod(method: string | null): void {
+    this.activeGenerationMethod.set(method);
+    this.selectedWord.set(null);
+    this.items.set([]);
+    this.categoryCount.set(0);
+    this.loadWordsAndCount(this.activeTab(), method);
   }
 
   selectWord(word: string): void {
     this.selectedWord.set(word);
-    this.fetchSeeds(word, this.activeTab());
+    this.fetchSeeds(word, this.activeTab(), this.activeGenerationMethod());
   }
 
   navigateToSeed(id: string): void {
     this.router.navigate(['/seeds', id]);
   }
 
-  private loadWordsAndCount(sourceType: SourceTypeFilter): void {
+  private loadWordsAndCount(sourceType: SourceTypeFilter, generationMethod: string | null): void {
     this.error.set(null);
 
-    this.seedService.getDistinctWords(sourceType).subscribe({
+    this.seedService.getDistinctWords(sourceType, generationMethod).subscribe({
       next: (words) => {
         this.words.set(words);
         if (words.length > 0) {
@@ -170,17 +218,17 @@ export class SeedsPageComponent implements OnInit {
       error: () => this.error.set('Failed to load categories')
     });
 
-    this.seedService.getTotalCount(sourceType).subscribe({
+    this.seedService.getTotalCount(sourceType, generationMethod).subscribe({
       next: (count) => this.totalCount.set(count)
     });
   }
 
-  private fetchSeeds(word: string, sourceType: SourceTypeFilter): void {
+  private fetchSeeds(word: string, sourceType: SourceTypeFilter, generationMethod: string | null): void {
     this.loading.set(true);
     this.error.set(null);
     this.items.set([]);
 
-    this.seedService.getByWord(word, 48, sourceType).subscribe({
+    this.seedService.getByWord(word, 48, sourceType, generationMethod).subscribe({
       next: (page) => {
         this.items.set([...page.items]);
         this.categoryCount.set(page.totalCount);

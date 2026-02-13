@@ -37,6 +37,28 @@ public class SeedCompositionRepository(AppDbContext dbContext) : ISeedCompositio
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<SeedComposition>> GetByWordAsync(
+        string word,
+        string? sourceType,
+        string? generationMethod,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        var query = dbContext.SeedCompositions.Where(s => s.Word == word);
+
+        if (!string.IsNullOrEmpty(sourceType))
+            query = query.Where(s => s.SourceType == sourceType);
+
+        if (!string.IsNullOrEmpty(generationMethod))
+            query = query.Where(s => s.GenerationMethod == generationMethod);
+
+        return await query
+            .OrderByDescending(s => s.QualityScore)
+            .Take(limit)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<SeedComposition?> GetByIdAsync(
         Guid id,
         CancellationToken cancellationToken = default)
@@ -72,6 +94,26 @@ public class SeedCompositionRepository(AppDbContext dbContext) : ISeedCompositio
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<string>> GetDistinctWordsAsync(
+        string? sourceType,
+        string? generationMethod,
+        CancellationToken cancellationToken = default)
+    {
+        var query = dbContext.SeedCompositions.AsQueryable();
+
+        if (!string.IsNullOrEmpty(sourceType))
+            query = query.Where(s => s.SourceType == sourceType);
+
+        if (!string.IsNullOrEmpty(generationMethod))
+            query = query.Where(s => s.GenerationMethod == generationMethod);
+
+        return await query
+            .Select(s => s.Word)
+            .Distinct()
+            .OrderBy(w => w)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<int> GetCountByWordAsync(
         string word,
         CancellationToken cancellationToken = default)
@@ -90,6 +132,23 @@ public class SeedCompositionRepository(AppDbContext dbContext) : ISeedCompositio
 
         if (!string.IsNullOrEmpty(sourceType))
             query = query.Where(s => s.SourceType == sourceType);
+
+        return await query.CountAsync(cancellationToken);
+    }
+
+    public async Task<int> GetCountByWordAsync(
+        string word,
+        string? sourceType,
+        string? generationMethod,
+        CancellationToken cancellationToken = default)
+    {
+        var query = dbContext.SeedCompositions.Where(s => s.Word == word);
+
+        if (!string.IsNullOrEmpty(sourceType))
+            query = query.Where(s => s.SourceType == sourceType);
+
+        if (!string.IsNullOrEmpty(generationMethod))
+            query = query.Where(s => s.GenerationMethod == generationMethod);
 
         return await query.CountAsync(cancellationToken);
     }
@@ -119,6 +178,39 @@ public class SeedCompositionRepository(AppDbContext dbContext) : ISeedCompositio
             query = query.Where(s => s.SourceType == sourceType);
 
         return await query.CountAsync(cancellationToken);
+    }
+
+    public async Task<int> GetTotalCountAsync(
+        string? sourceType,
+        string? generationMethod,
+        CancellationToken cancellationToken = default)
+    {
+        var query = dbContext.SeedCompositions.AsQueryable();
+
+        if (!string.IsNullOrEmpty(sourceType))
+            query = query.Where(s => s.SourceType == sourceType);
+
+        if (!string.IsNullOrEmpty(generationMethod))
+            query = query.Where(s => s.GenerationMethod == generationMethod);
+
+        return await query.CountAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<string>> GetDistinctGenerationMethodsAsync(
+        string? sourceType,
+        CancellationToken cancellationToken = default)
+    {
+        var query = dbContext.SeedCompositions.AsQueryable();
+
+        if (!string.IsNullOrEmpty(sourceType))
+            query = query.Where(s => s.SourceType == sourceType);
+
+        return await query
+            .Where(s => s.GenerationMethod != null)
+            .Select(s => s.GenerationMethod!)
+            .Distinct()
+            .OrderBy(m => m)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<SeedComposition>> GetCuratedByWordAsync(

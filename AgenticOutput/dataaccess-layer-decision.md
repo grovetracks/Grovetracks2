@@ -1,5 +1,7 @@
 # DataAccess Layer Decision
 
+> **UPDATE 2026-02-12**: The `QuickdrawDoodle` entity and S3-based storage approach described below has been deprecated and removed. Only `QuickdrawSimpleDoodle` with inline JSONB storage remains. This document is preserved for historical context.
+
 ## Decision
 Created `Grovetracks.DataAccess` as a shared class library containing EF Core DbContext and entity models. Both `Grovetracks.Api` and `Grovetracks.Etl` reference this project.
 

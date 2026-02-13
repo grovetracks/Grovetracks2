@@ -71,6 +71,51 @@ public static class AiCompositionPrompts
         - Make each variation visually distinct: different poses, angles, proportions, or styles
         """;
 
+    public const string OllamaSystemPrompt = """
+        You generate freehand drawings as stroke coordinate data in JSON format.
+
+        RULES:
+        1. Each drawing has 4-12 strokes. Each stroke has 8-25 coordinate points.
+        2. All coordinates are between 0.0 and 1.0. x=0 is left, x=1 is right. y=0 is top, y=1 is bottom.
+        3. The drawing MUST be large. Strokes must span from at least 0.15 to at least 0.85 on BOTH x and y axes.
+        4. Points within a stroke must be close together (like drawing a line). Typical gap between consecutive points: 0.02-0.08.
+        5. Each stroke is one continuous pen movement. Separate strokes for separate parts of the drawing.
+        6. The drawing must be clearly recognizable as the requested subject.
+        7. Add natural variation — not perfectly straight lines or perfect circles.
+
+        DO NOT:
+        - Place all points in a small cluster. The drawing must be LARGE and fill the canvas.
+        - Use fewer than 30 total points across all strokes.
+        - Put coordinates outside 0.0-1.0 range.
+        - Make all strokes the same length or shape.
+        """;
+
+    public const string FewShotUserPrompt = "Draw 1 distinct variation of: cat";
+
+    public const string FewShotAssistantResponse = """
+        {"compositions":[{"subject":"cat","strokes":[{"xs":[0.35,0.30,0.25,0.22,0.20,0.22,0.28,0.35],"ys":[0.25,0.22,0.18,0.22,0.28,0.32,0.30,0.25]},{"xs":[0.55,0.60,0.65,0.68,0.70,0.68,0.62,0.55],"ys":[0.25,0.22,0.18,0.22,0.28,0.32,0.30,0.25]},{"xs":[0.28,0.32,0.38,0.45,0.52,0.58,0.62],"ys":[0.30,0.35,0.38,0.38,0.38,0.35,0.30]},{"xs":[0.38,0.38,0.37],"ys":[0.32,0.34,0.33]},{"xs":[0.52,0.52,0.53],"ys":[0.32,0.34,0.33]},{"xs":[0.43,0.45,0.47],"ys":[0.36,0.37,0.36]},{"xs":[0.30,0.28,0.25,0.24,0.25,0.28,0.32,0.38,0.45,0.52,0.58,0.62,0.65,0.66,0.65,0.62],"ys":[0.40,0.48,0.55,0.62,0.70,0.75,0.78,0.80,0.80,0.78,0.75,0.70,0.62,0.55,0.48,0.40]},{"xs":[0.25,0.20,0.18,0.22,0.28],"ys":[0.72,0.78,0.85,0.85,0.80]},{"xs":[0.65,0.70,0.72,0.68,0.62],"ys":[0.72,0.78,0.85,0.85,0.80]},{"xs":[0.62,0.65,0.70,0.75,0.80,0.82,0.78,0.72],"ys":[0.55,0.58,0.60,0.60,0.58,0.55,0.52,0.52]}]}]}
+        """;
+
     public static string BuildUserPrompt(string subject, int perSubject) =>
         $"Draw {perSubject} distinct variations of: {subject}\n\nEach should be a single, clearly recognizable {subject} drawn with natural freehand strokes. Make each variation visually different — vary the pose, angle, proportions, or drawing style.";
+
+    public static object[] BuildOllamaMessages(string subject, int perSubject) =>
+    [
+        new { role = "system", content = OllamaSystemPrompt },
+        new { role = "user", content = FewShotUserPrompt },
+        new { role = "assistant", content = FewShotAssistantResponse },
+        new { role = "user", content = BuildUserPrompt(subject, perSubject) }
+    ];
+
+    public static object[] BuildOllamaMessages(
+        string subject,
+        int perSubject,
+        string fewShotUserPrompt,
+        string fewShotAssistantResponse) =>
+    [
+        new { role = "system", content = OllamaSystemPrompt },
+        new { role = "user", content = fewShotUserPrompt },
+        new { role = "assistant", content = fewShotAssistantResponse },
+        new { role = "user", content = BuildUserPrompt(subject, perSubject) }
+    ];
 }

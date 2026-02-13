@@ -1,5 +1,7 @@
 # Decision: Raw vs Simple Quickdraw Dataset Split
 
+> **UPDATE 2026-02-12**: The raw QuickdrawDoodle approach has been deprecated and removed from the codebase. Only the simple inline-storage approach (`QuickdrawSimpleDoodle`) remains in production. This document is preserved for historical context.
+
 ## Date: 2026-02-11
 
 ## Context

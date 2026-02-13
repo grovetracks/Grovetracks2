@@ -22,9 +22,18 @@ public class SeedCompositionsController(ISeedCompositionRepository repository) :
     [HttpGet("words", Name = "get-seed-distinct-words")]
     public async Task<IReadOnlyList<string>> GetDistinctWords(
         [FromQuery] string? sourceType = null,
+        [FromQuery] string? generationMethod = null,
         CancellationToken cancellationToken = default)
     {
-        return await repository.GetDistinctWordsAsync(sourceType, cancellationToken);
+        return await repository.GetDistinctWordsAsync(sourceType, generationMethod, cancellationToken);
+    }
+
+    [HttpGet("generation-methods", Name = "get-seed-generation-methods")]
+    public async Task<IReadOnlyList<string>> GetDistinctGenerationMethods(
+        [FromQuery] string? sourceType = null,
+        CancellationToken cancellationToken = default)
+    {
+        return await repository.GetDistinctGenerationMethodsAsync(sourceType, cancellationToken);
     }
 
     [HttpGet("word/{word}", Name = "get-seed-gallery-page")]
@@ -32,11 +41,12 @@ public class SeedCompositionsController(ISeedCompositionRepository repository) :
         string word,
         [FromQuery] int limit = DefaultPageSize,
         [FromQuery] string? sourceType = null,
+        [FromQuery] string? generationMethod = null,
         CancellationToken cancellationToken = default)
     {
         var clampedLimit = Math.Clamp(limit, 1, MaxPageSize);
-        var seeds = await repository.GetByWordAsync(word, sourceType, clampedLimit, cancellationToken);
-        var totalCount = await repository.GetCountByWordAsync(word, sourceType, cancellationToken);
+        var seeds = await repository.GetByWordAsync(word, sourceType, generationMethod, clampedLimit, cancellationToken);
+        var totalCount = await repository.GetCountByWordAsync(word, sourceType, generationMethod, cancellationToken);
 
         var items = seeds
             .Select(MapToResponse)
@@ -73,9 +83,10 @@ public class SeedCompositionsController(ISeedCompositionRepository repository) :
     [HttpGet("count", Name = "get-seed-total-count")]
     public async Task<int> GetTotalCount(
         [FromQuery] string? sourceType = null,
+        [FromQuery] string? generationMethod = null,
         CancellationToken cancellationToken = default)
     {
-        return await repository.GetTotalCountAsync(sourceType, cancellationToken);
+        return await repository.GetTotalCountAsync(sourceType, generationMethod, cancellationToken);
     }
 
     private static SeedCompositionWithDataResponse MapToResponse(SeedComposition seed)

@@ -15,6 +15,13 @@ public interface ISeedCompositionRepository
         int limit,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<SeedComposition>> GetByWordAsync(
+        string word,
+        string? sourceType,
+        string? generationMethod,
+        int limit,
+        CancellationToken cancellationToken = default);
+
     Task<SeedComposition?> GetByIdAsync(
         Guid id,
         CancellationToken cancellationToken = default);
@@ -26,6 +33,11 @@ public interface ISeedCompositionRepository
         string? sourceType,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<string>> GetDistinctWordsAsync(
+        string? sourceType,
+        string? generationMethod,
+        CancellationToken cancellationToken = default);
+
     Task<int> GetCountByWordAsync(
         string word,
         CancellationToken cancellationToken = default);
@@ -33,6 +45,12 @@ public interface ISeedCompositionRepository
     Task<int> GetCountByWordAsync(
         string word,
         string? sourceType,
+        CancellationToken cancellationToken = default);
+
+    Task<int> GetCountByWordAsync(
+        string word,
+        string? sourceType,
+        string? generationMethod,
         CancellationToken cancellationToken = default);
 
     Task AddRangeAsync(
@@ -43,6 +61,15 @@ public interface ISeedCompositionRepository
         CancellationToken cancellationToken = default);
 
     Task<int> GetTotalCountAsync(
+        string? sourceType,
+        CancellationToken cancellationToken = default);
+
+    Task<int> GetTotalCountAsync(
+        string? sourceType,
+        string? generationMethod,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<string>> GetDistinctGenerationMethodsAsync(
         string? sourceType,
         CancellationToken cancellationToken = default);
 

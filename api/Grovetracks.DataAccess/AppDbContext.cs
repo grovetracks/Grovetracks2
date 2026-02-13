@@ -5,7 +5,6 @@ namespace Grovetracks.DataAccess;
 
 public class AppDbContext : DbContext
 {
-    public DbSet<QuickdrawDoodle> QuickdrawDoodles => Set<QuickdrawDoodle>();
     public DbSet<QuickdrawSimpleDoodle> QuickdrawSimpleDoodles => Set<QuickdrawSimpleDoodle>();
     public DbSet<DoodleEngagement> DoodleEngagements => Set<DoodleEngagement>();
     public DbSet<SeedComposition> SeedCompositions => Set<SeedComposition>();
@@ -16,21 +15,6 @@ public class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<QuickdrawDoodle>(entity =>
-        {
-            entity.ToTable("quickdraw_doodles");
-            entity.HasKey(e => e.KeyId);
-
-            entity.Property(e => e.KeyId).HasColumnName("key_id");
-            entity.Property(e => e.Word).HasColumnName("word").HasMaxLength(100);
-            entity.Property(e => e.CountryCode).HasColumnName("country_code").HasMaxLength(10);
-            entity.Property(e => e.Timestamp).HasColumnName("timestamp");
-            entity.Property(e => e.Recognized).HasColumnName("recognized");
-            entity.Property(e => e.DrawingReference).HasColumnName("drawing_reference").HasMaxLength(200);
-
-            entity.HasIndex(e => e.Word);
-        });
-
         modelBuilder.Entity<QuickdrawSimpleDoodle>(entity =>
         {
             entity.ToTable("quickdraw_simple_doodles");

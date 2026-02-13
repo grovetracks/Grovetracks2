@@ -16,5 +16,27 @@ services:
       timeout: 5s
       retries: 5
 
+  jupyter:
+    image: jupyter/scipy-notebook:latest
+    container_name: grovetracks-jupyter
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./notebooks:/home/jovyan/work
+    environment:
+      - JUPYTER_TOKEN=grovetracks
+      - OLLAMA_URL=http://10.0.0.148:11434
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=grovetracks
+      - DB_PASSWORD=grovetracks_dev
+      - DB_NAME=grovetracks
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-4-5-20250929}
+    depends_on:
+      - postgres
+    profiles:
+      - jupyter
+
 volumes:
   grovetracks-pgdata:

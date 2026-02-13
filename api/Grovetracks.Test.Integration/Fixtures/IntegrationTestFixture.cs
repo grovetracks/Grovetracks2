@@ -24,10 +24,6 @@ public class IntegrationTestFixture : IAsyncLifetime
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(Postgres.ConnectionString));
 
-        services.AddSingleton(LocalStack.S3Client);
-        services.AddSingleton<IDrawingStorageService, S3DrawingStorageService>();
-        services.AddSingleton<ICompositionMapper, QuickdrawCompositionMapper>();
-        services.AddScoped<IQuickdrawDoodleRepository, QuickdrawDoodleRepository>();
         services.AddSingleton<ISimpleCompositionMapper, SimpleCompositionMapper>();
         services.AddScoped<IQuickdrawSimpleDoodleRepository, QuickdrawSimpleDoodleRepository>();
 
